@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <concealer/autoware_universe.hpp>
+#include <random>
 
 namespace concealer
 {
@@ -78,8 +79,18 @@ auto AutowareUniverse::getSteeringAngle() const -> double
   return getAckermannControlCommand().lateral.steering_tire_angle;
 }
 
+
 auto AutowareUniverse::updateLocalization() -> void
 {
+    constexpr uint_fast32_t seed = 1;
+    static std::mt19937 rand_engine(seed);
+    static std::normal_distribution<double> distribution(0.0, 0.1);
+
+    auto noised_pose = current_pose.load();
+    noised_pose.position.x += distribution(rand_engine);
+    noised_pose.position.y += distribution(rand_engine);
+    noised_pose.position.z += distribution(rand_engine);
+
   setAcceleration([this]() {
     geometry_msgs::msg::AccelWithCovarianceStamped message;
     message.header.stamp = get_clock()->now();
@@ -94,17 +105,17 @@ auto AutowareUniverse::updateLocalization() -> void
     return message;
   }());
 
-  setOdometry([this]() {
+  setOdometry([&]() {
     nav_msgs::msg::Odometry message;
     message.header.stamp = get_clock()->now();
     message.header.frame_id = "map";
-    message.pose.pose = current_pose.load();
+    message.pose.pose = noised_pose;
     message.pose.covariance = {};
     message.twist.twist = current_twist.load();
     return message;
   }());
 
-  setTransform(current_pose.load());
+  setTransform(noised_pose);
 }
 
 auto AutowareUniverse::updateVehicleState() -> void
